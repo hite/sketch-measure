@@ -447,19 +447,24 @@ SM.extend({
         return style.contextSettings().opacity()
     },
     getStyleName: function(layer){
-        var styles = (this.is(layer, MSTextLayer))? this.document.documentData().layerTextStyles(): this.document.documentData().layerStyles(),
-        layerStyle = layer.style(),
-        sharedObjectID = layerStyle.objectID(),
-        style;
+        var sketch = require('sketch');
+        var document = sketch.getSelectedDocument();
 
-        styles = styles.objectsSortedByName();
+        var styles = (this.is(layer, MSTextLayer))? document.sharedTextStyles: document.sharedLayerStyles,
+        objectID = layer.objectID(),
+        sharedObjectID ;
+        var jsonLayer = document.getLayerWithID(objectID);
+        sharedObjectID = jsonLayer.sharedStyleId;
 
-        if(styles.count() > 0){
-            style = this.find({key: "(objectID != NULL) && (objectID == %@)", match: sharedObjectID}, styles);
+        var styleName = null;
+        for (var index = 0; index < styles.length; index++) {
+            var style = styles[index];
+            if (style.id == sharedObjectID) {
+                styleName = style.name;
+            }
         }
 
-        if(!style) return "";
-        return this.toJSString(style.name());
+        return styleName;
     },
     updateContext: function(){
         this.context.document = NSDocumentController.sharedDocumentController().currentDocument();
