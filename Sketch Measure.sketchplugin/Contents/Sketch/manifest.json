@@ -1,5 +1,5 @@
 {
-    "author": "utom",
+    "author": "utom, hite",
     "commands" : [
         {
             "name": "Toolbar",
@@ -55,6 +55,12 @@
             "identifier": "commandExport",
             "shortcut": "ctrl shift e",
             "handler" : "commandExport",
+            "script": "mark.sketchscript"
+        },
+        {
+            "name": "Spec Export For Cli",
+            "identifier": "commandExportCli",
+            "handler" : "commandExportCli",
             "script": "mark.sketchscript"
         },
         {
@@ -156,6 +162,7 @@
             "commandExportable",
             "commandColor",
             "commandExport",
+            "commandExportCli",
             "-",
             "commandHidden",
             "commandLocked",
@@ -174,11 +181,11 @@
         ],
         "title" : "Sketch Measure"
     },
-    "identifier": "com.utom.measure",
+    "identifier": "me.hite.sketch_measure",
     "appcast": "https://raw.githubusercontent.com/utom/sketch-measure/master/appcast.xml",
-    "homepage": "http://utom.design/measure/",
-    "version": "2.8.2",
+    "homepage": "http://github.com/hite/sketch-measure/",
+    "version": "2.9.0",
     "description" : "Make it a fun to create spec for developers and teammates",
-    "authorEmail" : "utombox@gmail.com",
-    "name" : "Sketch Measure"
+    "authorEmail" : "iamhite@gmail.com",
+    "name" : "My Sketch Measure"
 }

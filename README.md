@@ -1,17 +1,11 @@
-# A new feature for Sketch Measure: Export Layer's influence Rect to Spec.
-
-Layer's influence rect includes the area of shadows and outside borders, it's exactly the same size with the exported image.
-
-                                       Regular rect                                                           Influence rect
-​              
-![regular-rect](https://pic4.zhimg.com/v2-c1792b8300fca0cdc90b564a27b8da8b_b.png)
-![influence-rect](https://pic3.zhimg.com/v2-a639e906f8fea576da8d9a8cc1cc752a_b.png)
-
-Sometime, shadows will not implement by engineers, it should be a part of image. Designer need to show the influence rect to engineers, not the regular rect. This is the feature using for.
-
-Just select the option in Export UI
-
-![export-ui](https://i1.hoopchina.com.cn/blogfile/201702/20/BbsImg148759897429137_471x602big.png)
+# Changelog
+1. 2019-12-04
+SketchTool can export all pages and artboard. Just run command
+```bash
+open -a Sketch.app homepage.sketch
+sleep 15s # Waits for opening homepage.sketch complete
+/Applications/Sketch.app/Contents/Resources/sketchtool/bin/sketchtool run ~/Library/Application\ Support/com.bohemiancoding.sketch3/Plugins/Sketch\ Measure.sketchplugin commandExportCli
+```
 
 # Sketch Measure
 

@@ -120,6 +120,9 @@ var SM = {
                     case "export":
                         this.export();
                         break;
+                    case "exportCli":
+                        this.exportCli();
+                        break;
                 }
             }
         },
@@ -2780,6 +2783,246 @@ SM.extend({
         }
 
         return savePanel.URL().path();
+    },
+    exportAllPanelsINeed: function(){
+        if(ga) ga.sendEvent('spec', 'export to spec viewer for cli');
+        var self = this;
+        this.artboardsData = [];
+        
+        self.selectionArtboards = [];
+        self.allCount = 0;
+
+        var data = {};
+        data.selection = [];
+        data.current = [];
+        data.pages = [];
+
+        data.exportOption = self.configs.exportOption;
+        if(data.exportOption == undefined){
+            data.exportOption = true;
+        }
+
+        data.exportInfluenceRect = self.configs.exportInfluenceRect;
+        if(data.exportInfluenceRect == undefined){
+            data.exportInfluenceRect = false;
+        }
+
+        self.configs.order = (self.configs.order)? self.configs.order: "positive";
+        data.order = self.configs.order;
+
+        if(this.selection.count() > 0){
+            var selectionArtboards = this.find({key: "(class != NULL) && (class == %@)", match: MSArtboardGroup}, this.selection, true);
+            if(selectionArtboards.count() > 0){
+                selectionArtboards = selectionArtboards.objectEnumerator();
+                while(artboard = selectionArtboards.nextObject()){
+                    data.selection.push(this.toJSString(artboard.objectID()));
+                }
+            }
+        }
+        if(this.artboard) data.current.push(this.toJSString(this.artboard.objectID()));
+
+        var pages = this.document.pages().objectEnumerator();
+        while(page = pages.nextObject()){
+            var pageData = {},
+                artboards = page.artboards().objectEnumerator();
+            pageData.name = this.toJSString(page.name());
+
+            log('exportAllPanelsINeed')
+            log(pageData.name)
+
+            if (['组件', '组件规范', '视觉规范'].includes(pageData.name)) {
+                log('skip page = ' + pageData.name);
+            } else {
+                pageData.objectID = this.toJSString(page.objectID());
+                pageData.artboards = [];
+
+                while(artboard = artboards.nextObject()){
+                    // if(!this.is(artboard, MSSymbolMaster)){
+                        var artboardData = {};
+                        artboardData.name = this.toJSString(artboard.name());
+                        artboardData.objectID = this.toJSString(artboard.objectID());
+                        artboardData.MSArtboardGroup = artboard;
+                        pageData.artboards.push(artboardData);
+
+                        self.allCount += artboard.children().count();
+                        self.selectionArtboards.push(artboard);
+                    // }
+                }
+                pageData.artboards.reverse()
+                data.pages.push(pageData);
+            }
+            
+        }
+        log(self.allCount)
+        log(self.selectionArtboards.length)
+        return true;
+    },
+    exportCli: function(){
+        if(this.exportAllPanelsINeed()){
+            if(this.selectionArtboards.length <= 0){
+                return false;
+            }
+            var self = this,
+                savePath = this.document.fileURL()? this.document.fileURL().path().stringByDeletingLastPathComponent(): "~";
+
+            if(savePath){
+                // self.message(_("Exporting..."));
+                var processingPanel = this.SMPanel({
+                        url: this.pluginSketch + "/panel/processing.html",
+                        width: 304,
+                        height: 104,
+                        floatWindow: true
+                    }),
+                    processing = processingPanel.windowScriptObject(),
+                    template = NSString.stringWithContentsOfFile_encoding_error(this.pluginSketch + "/template.html", 4, nil);
+
+                this.savePath = savePath;
+                var idx = 1,
+                    artboardIndex = 0,
+                    layerIndex = 0,
+                    layerCount = 0,
+                    exporting = false,
+                    data = {
+                        scale: self.configs.scale,
+                        unit: self.configs.unit,
+                        colorFormat: self.configs.colorFormat,
+                        artboards: [],
+                        slices: [],
+                        colors: []
+                    };
+
+                self.slices = [];
+                self.sliceCache = {};
+                self.maskCache = [];
+                self.wantsStop = false;
+
+                coscript.scheduleWithRepeatingInterval_jsFunction( 0, function( interval ){
+                    // self.message('Processing layer ' + idx + ' of ' + self.allCount);
+                    processing.evaluateWebScript("processing('"  + Math.round( idx / self.allCount * 100 ) +  "%', '" + _("Processing layer %@ of %@", [idx, self.allCount]) + "')");
+                    idx++;
+
+                    if(!data.artboards[artboardIndex]){
+                        data.artboards.push({layers: [], notes: []});
+                        self.maskCache = [];
+                        self.maskObjectID = undefined;
+                        self.maskRect = undefined;
+                    }
+
+                    if(!exporting) {
+                        exporting = true;
+                        var artboard = self.selectionArtboards[artboardIndex],
+                            page = artboard.parentGroup(),
+                            layer = artboard.children()[layerIndex],
+                            message = page.name() + ' - ' + artboard.name() + ' - ' + layer.name();
+                        // log( page.name() + ' - ' + artboard.name() + ' - ' + layer.name());
+                        try {
+                          self.getLayer(
+                              artboard, // Sketch artboard element
+                              layer, // Sketch layer element
+                              data.artboards[artboardIndex] // Save to data
+                          );
+                          layerIndex++;
+                          layerCount++;
+                          exporting = false;
+                        } catch (e) {
+                          self.wantsStop = true;
+                          log(e)
+                          processing.evaluateWebScript("$('#processing-text').html('<small>" + self.toHTMLEncode(message) + "</small>');");
+                          if(ga) ga.sendError(message)
+                        }
+
+                        if( layerIndex >= artboard.children().length ){
+                            var objectID = artboard.objectID(),
+                                artboardRect = self.getRect(artboard),
+                                page = artboard.parentGroup(),
+                                // name = self.toSlug(self.toHTMLEncode(page.name()) + ' ' + self.toHTMLEncode(artboard.name()));
+                                slug = self.toSlug(page.name() + ' ' + artboard.name());
+
+                            data.artboards[artboardIndex].pageName = self.toHTMLEncode(self.emojiToEntities(page.name()));
+                            data.artboards[artboardIndex].pageObjectID = self.toJSString(page.objectID());
+                            data.artboards[artboardIndex].name = self.toHTMLEncode(self.emojiToEntities(artboard.name()));
+                            data.artboards[artboardIndex].slug = slug;
+                            data.artboards[artboardIndex].objectID = self.toJSString(artboard.objectID());
+                            data.artboards[artboardIndex].width = artboardRect.width;
+                            data.artboards[artboardIndex].height = artboardRect.height;
+
+                            if(!self.configs.exportOption){
+                                var imageURL = NSURL.fileURLWithPath(self.exportImage({
+                                        layer: artboard,
+                                        scale: 2,
+                                        name: objectID
+                                    })),
+                                    imageData = NSData.dataWithContentsOfURL(imageURL),
+                                    imageBase64 = imageData.base64EncodedStringWithOptions(0);
+                                data.artboards[artboardIndex].imageBase64 = 'data:image/png;base64,' + imageBase64;
+
+                                var newData =  JSON.parse(JSON.stringify(data));
+                                newData.artboards = [data.artboards[artboardIndex]];
+                                self.writeFile({
+                                        content: self.template(template, {lang: language, data: JSON.stringify(newData)}),
+                                        path: self.toJSString(savePath),
+                                        fileName: slug + ".html"
+                                    });
+                            }
+                            else{
+                                // data.artboards[artboardIndex].imagePath = "preview/" + objectID + ".png";
+                                data.artboards[artboardIndex].imagePath = "preview/" + encodeURI(slug) + ".png";
+
+                                self.exportImage({
+                                        layer: artboard,
+                                        path: self.toJSString(savePath) + "/preview",
+                                        scale: 2,
+                                        // name: objectID,
+                                        name: slug
+                                    });
+
+                                self.writeFile({
+                                        content: "<meta http-equiv=\"refresh\" content=\"0;url=../index.html#artboard" + artboardIndex + "\">",
+                                        path: self.toJSString(savePath) + "/links",
+                                        fileName: slug + ".html"
+                                    });
+                            }
+
+
+                            layerIndex = 0;
+                            artboardIndex++;
+                        }
+
+                        if(artboardIndex >= self.selectionArtboards.length && layerCount >= self.allCount){
+                            if(self.slices.length > 0){
+                                data.slices = self.slices;
+                            }
+
+                            if(self.configs.colors && self.configs.colors.length > 0){
+                                data.colors = self.configs.colors;
+                            }
+
+                            var selectingPath = savePath;
+                            if(self.configs.exportOption){
+                                self.writeFile({
+                                        content: self.template(template, {lang: language, data: JSON.stringify(data)}),
+                                        path: self.toJSString(savePath),
+                                        fileName: "index.html"
+                                    });
+                                selectingPath = savePath + "/index.html";
+                            }
+                            NSWorkspace.sharedWorkspace().activateFileViewerSelectingURLs([NSURL.fileURLWithPath(selectingPath)]);
+
+                            self.message(_("Export complete!"));
+                            self.wantsStop = true;
+                        }
+
+                    }
+
+                    if( self.wantsStop === true ){
+                        if(ga) ga.sendEvent('spec', 'spec done');
+                        return interval.cancel();
+                    }
+
+
+                });
+            }
+        }
     },
     exportPanel: function(){
         if(ga) ga.sendEvent('spec', 'export to spec viewer');
